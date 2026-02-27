@@ -25,12 +25,15 @@ def main():
         import streamlit
         import torch
         import faiss
-        from streamlit_mic_recorder import mic_recorder
         print("✅ 核心依赖已安装")
     except ImportError as e:
         print(f"❌ 缺少依赖: {e}")
         print("请运行: pip install -r requirements.txt")
         sys.exit(1)
+    try:
+        from streamlit_mic_recorder import mic_recorder  # noqa: F401
+    except ImportError:
+        print("⚠️ 可选依赖 streamlit-mic-recorder 未安装，将禁用语音输入功能")
     
     # 检查 .env 文件
     env_path = os.path.join(project_root, '.env')

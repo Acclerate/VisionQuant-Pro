@@ -398,6 +398,11 @@ class FundamentalMiner:
             # 补齐行业信息（来自缓存/spot）
             if not result.get("industry") and symbol in self._industry_cache:
                 result["industry"] = self._industry_cache.get(symbol)
+            # 再兜底一次：从行业板块成分反查（避免返回空行业）
+            if not result.get("industry"):
+                inferred_ind = self._lookup_industry_from_boards(symbol, max_retries=max(1, self._spot_retry), max_scan=300)
+                if inferred_ind:
+                    result["industry"] = inferred_ind
             if result.get("industry"):
                 self._industry_cache[symbol] = result.get("industry")
                 if not force_live:
@@ -753,10 +758,10 @@ class FundamentalMiner:
         if not industry or industry == "未知":
             industry = self._lookup_industry_from_boards(symbol, max_retries=max_retries)
 
-        # 3) 最后兜底：板块按代码前缀
+        # 3) 最后兜底：若无法确认真实行业，返回“未知”
+        # 不再用交易板块前缀冒充行业，避免产生错误同行（如返回银行股）
         if not industry:
-            prefix = symbol[:2]
-            industry = {"60": "上海主板", "00": "深圳主板", "30": "创业板", "68": "科创板"}.get(prefix, "未知")
+            industry = "未知"
 
         # 保存行业缓存（落盘）
         if industry and industry not in ["未知", "上海主板", "深圳主板", "创业板", "科创板"] and not force_live:
@@ -913,16 +918,6 @@ class FundamentalMiner:
                         pb_col = next((c for c in peers_df.columns if '市净率' in c or 'PB' in str(c).upper()), None)
                         mkt_cap_col = next((c for c in peers_df.columns if '总市值' in c), None) or next((c for c in peers_df.columns if '市值' in c and '流通' not in c), None)
 
-                # 最后兜底：如果行业匹配失败，至少返回市值相近的股票（排除当前股票）
-                if peers_df.empty and code_col:
-                    # 尝试按市值排序，取前10个（排除当前股票）
-                    if mkt_cap_col and mkt_cap_col in full_market.columns:
-                        candidates = full_market[full_market[code_col] != symbol].copy()
-                        if not candidates.empty:
-                            candidates = candidates.sort_values(by=mkt_cap_col, ascending=False).head(10)
-                            peers_df = candidates
-                            print(f"⚠️ [{symbol}] 行业匹配失败，使用市值前10作为对标（行业: {industry}）")
-                
                 if peers_df.empty:
                     print(f"⚠️ [{symbol}] 无法获取行业对标数据（行业: {industry}）")
                     return industry, pd.DataFrame()
@@ -930,15 +925,6 @@ class FundamentalMiner:
                 # 确保排除当前股票，且至少有2个同行
                 if code_col and code_col in peers_df.columns and len(peers_df) > 0:
                     peers_df = peers_df[peers_df[code_col] != symbol].copy()
-                    if len(peers_df) < 2 and mkt_cap_col and mkt_cap_col in full_market.columns:
-                        # 如果同行太少，补充市值相近的股票
-                        candidates = full_market[full_market[code_col] != symbol].copy()
-                        if not candidates.empty:
-                            candidates = candidates.sort_values(by=mkt_cap_col, ascending=False).head(6)
-                            existing_codes = set(peers_df[code_col].tolist()) if code_col in peers_df.columns else set()
-                            candidates = candidates[~candidates[code_col].isin(existing_codes)]
-                            if len(candidates) > 0:
-                                peers_df = pd.concat([peers_df, candidates.head(6 - len(peers_df))], ignore_index=True)
 
             # 排除当前股票
             if code_col and code_col in peers_df.columns:

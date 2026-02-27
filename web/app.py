@@ -15,11 +15,14 @@ PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# 强制禁用代理（避免 AkShare/requests 被系统代理影响）
-for _k in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]:
-    os.environ.pop(_k, None)
-os.environ.setdefault("NO_PROXY", "*")
-os.environ.setdefault("no_proxy", "*")
+# 网络模式：
+# - 默认尊重系统代理（更适合公司网络/本地代理环境）
+# - 如需强制直连，可设置环境变量 VQ_FORCE_NO_PROXY=1
+if os.getenv("VQ_FORCE_NO_PROXY", "0") == "1":
+    for _k in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]:
+        os.environ.pop(_k, None)
+    os.environ.setdefault("NO_PROXY", "*")
+    os.environ.setdefault("no_proxy", "*")
 
 try:
     from src.data.data_loader import DataLoader
@@ -284,7 +287,8 @@ def _safe_get_fundamentals(fund, symbol, force_live: bool):
 
 def _safe_get_industry_peers(fund, symbol, force_live: bool):
     try:
-        return fund.get_industry_peers(symbol, force_live=force_live)
+        # 工业化默认：限制重试次数，避免弱网下单次请求阻塞过久
+        return fund.get_industry_peers(symbol, max_retries=1, force_live=force_live)
     except TypeError:
         return fund.get_industry_peers(symbol)
 
@@ -591,7 +595,10 @@ if url_symbol:
 
 from backtest_handlers import run_backtest, run_stratified_backtest_batch
 from factor_analysis_handlers import show_factor_analysis as render_factor_analysis
-from streamlit_mic_recorder import mic_recorder
+try:
+    from streamlit_mic_recorder import mic_recorder
+except ImportError:
+    mic_recorder = None
 
 with st.sidebar:
     st.title("🦄 VisionQuant Pro")
@@ -684,15 +691,18 @@ if mode == "🔍 单只股票分析":
         with st.spinner(f"正在全栈扫描 {symbol}..."):
             try:
                 logger.info(f"开始分析股票: {symbol}")
-                df = eng["loader"].get_stock_data(symbol, use_cache=False)
+                # 工业化默认：先用本地缓存秒开，再按需实时刷新（避免网络抖动导致首屏卡死）
+                df = eng["loader"].get_stock_data(symbol, use_cache=True)
                 if df is None or df.empty:
-                    logger.warning(f"实时拉取失败，回退本地缓存: {symbol}")
-                    df = eng["loader"].get_stock_data(symbol, use_cache=True)
+                    logger.warning(f"本地缓存缺失，尝试实时拉取: {symbol}")
+                    df = eng["loader"].get_stock_data(symbol, use_cache=False)
                     if df is None or df.empty:
                         st.error("数据获取失败")
                         logger.error(f"数据获取失败: {symbol}")
                         st.stop()
-                    st.warning("实时拉取失败，已回退本地缓存（仅本次展示）。")
+                else:
+                    # 非阻塞体验：缓存可用则继续流程，不强制等待实时网络
+                    pass
             except Exception as e:
                 logger.exception(f"数据获取异常: {symbol}")
                 st.error(f"数据获取失败: {str(e)}")
@@ -724,10 +734,10 @@ if mode == "🔍 单只股票分析":
                     _has_valid_num(fd.get("total_mv")),
                 ])
 
-            # 基本面：先实时拉取，失败再回退缓存
-            fund_data = _safe_get_fundamentals(eng["fund"], symbol, force_live=True)
+            # 基本面：先缓存后实时（优先响应速度）
+            fund_data = _safe_get_fundamentals(eng["fund"], symbol, force_live=False)
             if not _fund_ok(fund_data):
-                fund_data = _safe_get_fundamentals(eng["fund"], symbol, force_live=False)
+                fund_data = _safe_get_fundamentals(eng["fund"], symbol, force_live=True)
             stock_name = fund_data.get('name') or symbol
             status.write("生成查询K线图...")
 
@@ -871,8 +881,8 @@ if mode == "🔍 单只股票分析":
 
             df_f = eng["factor"]._add_technical_indicators(df)
             news_text = eng["news"].get_latest_news(symbol)
-            # 行业对标：先实时拉取，失败再回退缓存
-            ind_name, peers_df = _safe_get_industry_peers(eng["fund"], symbol, force_live=True)
+            # 行业对标：先缓存后实时（优先响应速度）
+            ind_name, peers_df = _safe_get_industry_peers(eng["fund"], symbol, force_live=False)
             if (
                 not ind_name
                 or ind_name in ["未知", "上海主板", "深圳主板", "创业板", "科创板"]
@@ -880,7 +890,7 @@ if mode == "🔍 单只股票分析":
                 or peers_df.empty
                 or len(peers_df) < 2
             ):
-                ind_name, peers_df = _safe_get_industry_peers(eng["fund"], symbol, force_live=False)
+                ind_name, peers_df = _safe_get_industry_peers(eng["fund"], symbol, force_live=True)
             if (not ind_name or ind_name == "未知") and fund_data.get("industry"):
                 ind_name = fund_data.get("industry")
             progress.progress(95)
@@ -1515,7 +1525,11 @@ if mode == "🔍 单只股票分析":
         user_voice_text = None
         with c_mic:
             st.write(" ")
-            audio = mic_recorder(start_prompt="🎙️", stop_prompt="⏹️", key='recorder', format='wav')
+            audio = None
+            if mic_recorder is not None:
+                audio = mic_recorder(start_prompt="🎙️", stop_prompt="⏹️", key='recorder', format='wav')
+            else:
+                st.caption("🎙️语音功能未启用")
         if audio:
             transcribed = eng["audio"].transcribe(audio['bytes'])
             if transcribed and transcribed != st.session_state.last_voice_text:

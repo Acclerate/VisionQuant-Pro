@@ -631,6 +631,10 @@ class VisionEngine:
                 feat = c.get("feature_sim", 0.5)
                 seg = c.get("seg_score", 0.5)
                 sim = c.get("sim_score", 0.5)
+                # 防御式兜底：避免 None 进入数值计算
+                feat = 0.5 if feat is None else float(feat)
+                seg = 0.5 if seg is None else float(seg)
+                sim = 0.5 if sim is None else float(sim)
 
                 # 趋势/相关性软惩罚：不再硬过滤，避免 Top10 缺失
                 trend_flag = c.get("trend_match")
