@@ -115,7 +115,7 @@ class NewsHarvester:
         优先级: AkShare -> Google RSS -> Yahoo Finance
         """
         symbol = str(symbol).strip().zfill(6)
-        print(f"📰 [新闻监控] 正在扫描 {symbol} 的舆情...")
+        print(f"[新闻监控] 正在扫描 {symbol} 的舆情...")
 
         cache_key = f"{symbol}:{top_n}"
         cached = self._cache_get(cache_key)
@@ -129,7 +129,7 @@ class NewsHarvester:
         if not news_items:
             news_items = self._fetch_eastmoney_news(f"{symbol} 股票", top_n=top_n)
         if news_items:
-            print("✅ [源:东方财富] 获取成功")
+            print("[OK] [源:东方财富] 获取成功")
             result = "\n\n".join(news_items)
             self._cache_set(cache_key, result)
             return result
@@ -158,7 +158,7 @@ class NewsHarvester:
                         count += 1
 
                     if news_items:
-                        print("✅ [源:Google News] 获取成功")
+                        print("[OK] [源:Google News] 获取成功")
                         result = "\n\n".join(news_items)
                         self._cache_set(cache_key, result)
                         return result
@@ -172,7 +172,7 @@ class NewsHarvester:
                 if attempt < 1:
                     time.sleep(0.5)
                     continue
-                print(f"❌ Google RSS 异常: {e}")
+                print(f"[错误] Google RSS 异常: {e}")
 
         # === 3. 尝试 Yahoo Finance (最后防线) ===
         for attempt in range(2):  # 最多重试2次
@@ -189,7 +189,7 @@ class NewsHarvester:
                             news_items.append(f"- **{date_str}** (Yahoo) {title}")
 
                     if news_items:
-                        print("✅ [源:Yahoo] 获取成功")
+                        print("[OK] [源:Yahoo] 获取成功")
                         result = "\n\n".join(news_items)
                         self._cache_set(cache_key, result)
                         return result
@@ -201,7 +201,7 @@ class NewsHarvester:
                     continue
                 pass
 
-        result = "✅ 暂无重大敏感舆情 (多源扫描完成)。"
+        result = "[OK] 暂无重大敏感舆情 (多源扫描完成)。"
         self._cache_set(cache_key, result)
         return result
 

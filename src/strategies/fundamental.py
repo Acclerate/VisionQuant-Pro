@@ -5,9 +5,40 @@ import time
 import os
 import json
 import difflib
+import threading
 from src.utils.net_utils import no_proxy_env
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _call_with_timeout(func, args=(), kwargs=None, timeout: int = 30):
+    """
+    带超时的函数调用（兼容 Windows）
+    """
+    if kwargs is None:
+        kwargs = {}
+    result = [None]
+    exception = [None]
+
+    def worker():
+        try:
+            result[0] = func(*args, **kwargs)
+        except Exception as e:
+            exception[0] = e
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout)
+    
+    if thread.is_alive():
+        return None, TimeoutError(f"操作超时 ({timeout}s)")
+    if exception[0] is not None:
+        return None, exception[0]
+    return result[0], None
+
+
+class TimeoutError(Exception):
+    pass
 
 
 class FundamentalMiner:
@@ -84,7 +115,7 @@ class FundamentalMiner:
         获取深度财务指标 (含成长性与安全性分析)
         """
         symbol = str(symbol).strip().zfill(6)
-        print(f"🔍 [财务分析] 正在透视 {symbol}...")
+        print(f"[财务分析] 正在透视 {symbol}...")
 
         # 默认结果结构扩展
         result = {
@@ -196,7 +227,13 @@ class FundamentalMiner:
                 for attempt in range(max(1, self._spot_retry + 1)):
                     try:
                         with no_proxy_env():
-                            info_df = ak.stock_individual_info_em(symbol=symbol)
+                            info_df, err = _call_with_timeout(
+                                ak.stock_individual_info_em,
+                                kwargs={"symbol": symbol},
+                                timeout=15
+                            )
+                        if err:
+                            raise err
                         if info_df is not None and not info_df.empty:
                             # 常见字段：item/value
                             if "item" in info_df.columns and "value" in info_df.columns:
@@ -410,14 +447,13 @@ class FundamentalMiner:
 
         except Exception as e:
             result["_err"].append(f"spot_error: {type(e).__name__}: {e}")
-            print(f"⚠️ 财报异常: {e}")
+            print(f"[警告] 财报异常: {e}")
 
         return result
 
     def _get_spot_df_cached(self, result: dict, force_refresh: bool = False):
         """
-        获取全市场 spot 数据（带缓存 + 重试）。
-        工业级优化：增强重试机制和错误处理
+        获取全市场 spot 数据（带缓存 + 重试 + 超时控制）。
         """
         now = time.time()
         if not force_refresh and self._spot_cache_df is not None and (now - self._spot_cache_ts) < self._spot_cache_ttl_sec:
@@ -428,10 +464,14 @@ class FundamentalMiner:
         for i in range(max_retries):
             try:
                 with no_proxy_env():
-                    df = ak.stock_zh_a_spot_em()
+                    df, err = _call_with_timeout(
+                        ak.stock_zh_a_spot_em,
+                        timeout=30
+                    )
+                if err:
+                    raise err
                 if df is None or df.empty:
                     raise RuntimeError("spot_df_empty")
-                # 标准化代码列为6位
                 code_col = next((c for c in df.columns if '代码' in c), None)
                 if code_col:
                     df[code_col] = df[code_col].astype(str).str.zfill(6)
@@ -441,11 +481,9 @@ class FundamentalMiner:
                 return df
             except Exception as e:
                 last_err = e
-                # 指数退避，降低瞬时波动/限流影响
                 if i < max_retries - 1:
-                    time.sleep(0.5 * (i + 1))  # 0.5s, 1s, 1.5s...
+                    time.sleep(0.5 * (i + 1))
 
-        # 网络失败时，尝试读取落盘缓存
         if self._spot_cache_df is None and os.path.exists(self._spot_cache_path):
             try:
                 df = pd.read_csv(self._spot_cache_path)
@@ -469,14 +507,19 @@ class FundamentalMiner:
 
     def _get_spot_df_live(self, result: dict):
         """
-        强制实时拉取spot，不读写缓存。
+        强制实时拉取spot，不读写缓存，带超时控制。
         """
         last_err = None
         max_retries = max(1, self._spot_retry + 1)
         for i in range(max_retries):
             try:
                 with no_proxy_env():
-                    df = ak.stock_zh_a_spot_em()
+                    df, err = _call_with_timeout(
+                        ak.stock_zh_a_spot_em,
+                        timeout=30
+                    )
+                if err:
+                    raise err
                 if df is None or df.empty:
                     raise RuntimeError("spot_df_empty")
                 code_col = next((c for c in df.columns if '代码' in c), None)
@@ -487,7 +530,6 @@ class FundamentalMiner:
                 last_err = e
                 if i < max_retries - 1:
                     time.sleep(0.5 * (i + 1))
-        # 若实时失败，尝试读取落盘缓存，避免PE/行业同时缺失
         try:
             if os.path.exists(self._spot_cache_path):
                 df = pd.read_csv(self._spot_cache_path)
@@ -740,7 +782,7 @@ class FundamentalMiner:
                     if attempt < max_retries - 1:
                         time.sleep(0.5 * (attempt + 1))
                         continue
-                    print(f"⚠️ 获取个股信息失败 ({symbol}): {e}")
+                    print(f"[警告] 获取个股信息失败 ({symbol}): {e}")
                     industry = None
 
         # 2) 使用缓存的全市场spot兜底
@@ -789,7 +831,7 @@ class FundamentalMiner:
                             if attempt < max_retries - 1:
                                 time.sleep(0.5 * (attempt + 1))
                                 continue
-                            print(f"⚠️ 获取全市场数据失败 (尝试{attempt+1}/{max_retries}): {e}")
+                            print(f"[警告] 获取全市场数据失败 (尝试{attempt+1}/{max_retries}): {e}")
                     if full_market is None or full_market.empty:
                         return industry or "未知", pd.DataFrame()
             else:
@@ -876,7 +918,7 @@ class FundamentalMiner:
                         if attempt < max_retries - 1:
                             time.sleep(0.5 * (attempt + 1))
                             continue
-                        print(f"⚠️ 获取行业成分股失败 ({industry}, 尝试{attempt+1}/{max_retries}): {e}")
+                        print(f"[警告] 获取行业成分股失败 ({industry}, 尝试{attempt+1}/{max_retries}): {e}")
 
             # 兜底1：如果 spot_df 自带行业列，且上面获取成分股失败
             if peers_df.empty and ind_col and industry not in ["未知", "上海主板", "深圳主板", "创业板", "科创板"]:
@@ -919,7 +961,7 @@ class FundamentalMiner:
                         mkt_cap_col = next((c for c in peers_df.columns if '总市值' in c), None) or next((c for c in peers_df.columns if '市值' in c and '流通' not in c), None)
 
                 if peers_df.empty:
-                    print(f"⚠️ [{symbol}] 无法获取行业对标数据（行业: {industry}）")
+                    print(f"[警告] [{symbol}] 无法获取行业对标数据（行业: {industry}）")
                     return industry, pd.DataFrame()
                 
                 # 确保排除当前股票，且至少有2个同行
@@ -931,7 +973,7 @@ class FundamentalMiner:
                 peers_df = peers_df[peers_df[code_col] != symbol].copy()
             
             if peers_df.empty:
-                print(f"⚠️ [{symbol}] 排除当前股票后，无同行数据")
+                print(f"[警告] [{symbol}] 排除当前股票后，无同行数据")
                 return industry, pd.DataFrame()
             
             if mkt_cap_col and mkt_cap_col in peers_df.columns:

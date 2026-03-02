@@ -102,9 +102,9 @@ class RegimeManager:
                     config = yaml.safe_load(f)
                 return config
             except Exception as e:
-                print(f"⚠️ 加载配置文件失败: {e}，使用默认配置")
+                print(f"[警告] 加载配置文件失败: {e}，使用默认配置")
         else:
-            print(f"⚠️ 配置文件不存在: {self.config_path}，使用默认配置")
+            print(f"[警告] 配置文件不存在: {self.config_path}，使用默认配置")
         
         # 默认配置
         return {
@@ -148,7 +148,7 @@ class RegimeManager:
                     prices = index_df['Close']
                     returns = prices.pct_change().dropna()
             except Exception as e:
-                print(f"⚠️ 获取市场数据失败: {e}")
+                print(f"[警告] 获取市场数据失败: {e}")
         
         returns = self._normalize_returns(returns)
         if returns is None or len(returns) < 60:

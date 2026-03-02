@@ -15,7 +15,7 @@ class AudioManager:
     def __init__(self):
         if not API_KEY:
             self.model = None
-            print("❌ [Audio] API Key 缺失")
+            print("[错误] [Audio] API Key 缺失")
             return
 
         genai.configure(api_key=API_KEY)
@@ -30,7 +30,7 @@ class AudioManager:
             "gemini-pro"  # 兜底 (可能不支持音频，但值得一试)
         ]
 
-        print("🎤 [Audio] 语音引擎初始化...")
+        print("[Audio] 语音引擎初始化...")
 
     def transcribe(self, audio_bytes):
         """
@@ -40,10 +40,10 @@ class AudioManager:
 
         # 1. 检查数据大小
         data_size = len(audio_bytes)
-        print(f"🎤 [Audio] 收到数据: {data_size} bytes")
+        print(f"[Audio] 收到数据: {data_size} bytes")
 
         if data_size < 1000:
-            print("⚠️ 录音时间太短，忽略")
+            print("[警告] 录音时间太短，忽略")
             return None
 
         # 2. 强制保存调试文件 (保留这个好习惯)
@@ -72,7 +72,7 @@ class AudioManager:
 
                 text = response.text.strip()
                 if text:
-                    print(f"✅ [Audio] 识别成功 ({model_name}): {text}")
+                    print(f"[OK] [Audio] 识别成功 ({model_name}): {text}")
                     return text
 
             except Exception as e:
@@ -80,8 +80,8 @@ class AudioManager:
                 if "404" in str(e) or "not found" in str(e).lower():
                     continue
                 else:
-                    print(f"❌ {model_name} 报错: {e}")
+                    print(f"[错误] {model_name} 报错: {e}")
                     continue
 
-        print("❌ 所有模型均无法识别音频，请检查 API Key 权限或网络。")
+        print("[错误] 所有模型均无法识别音频，请检查 API Key 权限或网络。")
         return None

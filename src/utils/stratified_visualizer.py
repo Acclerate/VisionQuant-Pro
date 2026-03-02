@@ -212,4 +212,4 @@ if __name__ == "__main__":
     
     visualizer = StratifiedVisualizer()
     visualizer.plot_stratified_comparison(results, 'test_comparison.png')
-    print("✅ 可视化图表已生成")
+    print("[OK] 可视化图表已生成")

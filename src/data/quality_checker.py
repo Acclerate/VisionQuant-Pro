@@ -272,20 +272,20 @@ class DataQualityChecker:
 日期范围: {result['date_range']['start']} 至 {result['date_range']['end']}
 
 质量得分: {result['score']}/100
-状态: {'✅ 通过' if result['is_valid'] else '❌ 未通过'}
+状态: {'[OK] 通过' if result['is_valid'] else '[失败] 未通过'}
 
 错误 ({len(result['errors'])}):
 """
         if result['errors']:
             for error in result['errors']:
-                report += f"  ❌ {error}\n"
+                report += f"  [X] {error}\n"
         else:
             report += "  无错误\n"
         
         report += f"\n警告 ({len(result['warnings'])}):\n"
         if result['warnings']:
             for warning in result['warnings']:
-                report += f"  ⚠️ {warning}\n"
+                report += f"  [!] {warning}\n"
         else:
             report += "  无警告\n"
         

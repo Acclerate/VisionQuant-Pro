@@ -36,7 +36,7 @@ class AdaptiveVisionStrategy:
         self.commission = commission
         self.loader = DataLoader()
 
-        print("🚀 [Adaptive引擎] 初始化...")
+        print("[引擎] [Adaptive引擎] 初始化...")
         self._load_data()
 
     def _load_data(self):
@@ -46,7 +46,7 @@ class AdaptiveVisionStrategy:
             self.pred_df['date'] = self.pred_df['date'].astype(str).str.replace('-', '')
             self.pred_df['symbol'] = self.pred_df['symbol'].astype(str).str.zfill(6)
             self.vision_map = self.pred_df.set_index(['symbol', 'date'])['pred_win_rate'].to_dict()
-            print(f"✅ 视觉信号库: {len(self.pred_df)} 条")
+            print(f"[OK] 视觉信号库: {len(self.pred_df)} 条")
         else:
             self.vision_map = {}
 
@@ -73,7 +73,7 @@ class AdaptiveVisionStrategy:
         return data
 
     def run_backtest(self, symbol, start_date, end_date):
-        print(f"\n🧪 [回测] {symbol} | {start_date}-{end_date}")
+        print(f"\n[回测] {symbol} | {start_date}-{end_date}")
 
         # 1. 数据获取 (预加载300天)
         start_dt = datetime.strptime(start_date, "%Y%m%d")
@@ -197,10 +197,10 @@ class AdaptiveVisionStrategy:
         bench_ret = (df_bt['Close'].iloc[-1] - df_bt['Close'].iloc[0]) / df_bt['Close'].iloc[0] * 100
         alpha = final_ret - bench_ret
 
-        print(f"🏁 策略收益: {final_ret:>6.2f}% (基准: {bench_ret:>6.2f}%)")
-        print(f"📈 Alpha   : {alpha:>6.2f}%")
-        print(f"📊 交易次数: {len(trade_log)}")
-        print(f"💡 触发示例: {trade_log[0]['info'] if trade_log else '无'}")
+        print(f"[结果] 策略收益: {final_ret:>6.2f}% (基准: {bench_ret:>6.2f}%)")
+        print(f"[Alpha]   : {alpha:>6.2f}%")
+        print(f"[统计] 交易次数: {len(trade_log)}")
+        print(f"[示例] 触发示例: {trade_log[0]['info'] if trade_log else '无'}")
 
         return final_ret
 
@@ -208,7 +208,7 @@ class AdaptiveVisionStrategy:
 if __name__ == "__main__":
     bt = AdaptiveVisionStrategy()
 
-    print("\n=== 🚀 最终版: 自适应双模态策略 ===")
+    print("\n=== [策略] 最终版: 自适应双模态策略 ===")
 
     results = []
     targets = ["601899", "600519", "000001", "300750", "601318"]
@@ -217,4 +217,4 @@ if __name__ == "__main__":
         r = bt.run_backtest(t, "20230101", "20241220")
         results.append(r)
 
-    print(f"\n🏆 组合平均收益: {np.mean(results):.2f}%")
+    print(f"\n[结果] 组合平均收益: {np.mean(results):.2f}%")

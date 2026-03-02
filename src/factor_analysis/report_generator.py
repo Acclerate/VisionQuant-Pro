@@ -71,7 +71,7 @@ class FactorReportGenerator:
         }
         
         # 1. IC分析
-        print("📊 进行IC分析...")
+        print("[分析] 进行IC分析...")
         ic_result = self.ic_analyzer.analyze(factor_values, returns)
         report['ic_analysis'] = {
             'summary': ic_result['summary'],
@@ -80,7 +80,7 @@ class FactorReportGenerator:
         }
         
         # 2. Regime分析
-        print("📈 进行Regime识别...")
+        print("[分析] 进行Regime识别...")
         regimes = self.regime_detector.detect_regime(returns, prices)
         regime_stats = self.regime_detector.get_regime_statistics(regimes, returns)
         report['regime_analysis'] = {
@@ -89,7 +89,7 @@ class FactorReportGenerator:
         }
         
         # 3. 衰减分析
-        print("📉 进行衰减分析...")
+        print("[分析] 进行衰减分析...")
         ic_series = ic_result['ic_series']
         decay_result = self.decay_analyzer.analyze_decay(ic_series)
         report['decay_analysis'] = {
@@ -101,7 +101,7 @@ class FactorReportGenerator:
         
         # 4. 拥挤检测
         if factor_exposures is not None:
-            print("🔍 进行拥挤检测...")
+            print("[分析] 进行拥挤检测...")
             crowding_result = self.crowding_detector.detect_crowding(factor_exposures)
             report['crowding_analysis'] = {
                 'is_crowded': crowding_result['is_crowded'],
@@ -113,7 +113,7 @@ class FactorReportGenerator:
             report['crowding_analysis'] = None
         
         # 5. 风险补偿分析
-        print("💰 进行风险补偿分析...")
+        print("[分析] 进行风险补偿分析...")
         risk_result = self.risk_analyzer.analyze_risk_compensation(returns, factor_values)
         report['risk_compensation'] = {
             'overall_metrics': risk_result['overall_metrics'],

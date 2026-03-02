@@ -323,7 +323,7 @@ class FactorInvalidationDetector:
         
         score = invalidation_result['invalidation_score']
         
-        return f"⚠️ 因子可能失效（得分: {score:.2f}）\n原因: {', '.join(warnings)}"
+        return f"[警告] 因子可能失效（得分: {score:.2f})\\n原因: {', '.join(warnings)}"
 
 
 if __name__ == "__main__":

@@ -39,10 +39,10 @@ EPOCHS = 5  # 训练轮数 (K线图比较简单，5轮通常能收敛)
 # ==========================================
 class KLineDataset(Dataset):
     def __init__(self, img_dir):
-        print(f"🔍 正在扫描图片目录: {img_dir} ...")
+        print(f"[扫描] 正在扫描图片目录: {img_dir} ...")
         # 获取所有 png 文件
         self.img_files = sorted(glob.glob(os.path.join(img_dir, "*.png")))
-        print(f"📦 训练集加载完毕: 共发现 {len(self.img_files)} 张 K 线图")
+        print(f"[OK] 训练集加载完毕: 共发现 {len(self.img_files)} 张 K 线图")
 
         # 预处理：调整大小 -> 转Tensor
         self.transform = transforms.Compose([
@@ -74,18 +74,18 @@ def train():
     # 1. 设备选择
     if torch.backends.mps.is_available():
         device = torch.device("mps")
-        print("🚀 [训练] 使用 Apple Metal (MPS) 显卡加速")
+        print("[GPU] [训练] 使用 Apple Metal (MPS) 显卡加速")
     elif torch.cuda.is_available():
         device = torch.device("cuda")
-        print("🚀 [训练] 使用 NVIDIA CUDA 显卡加速")
+        print("[GPU] [训练] 使用 NVIDIA CUDA 显卡加速")
     else:
         device = torch.device("cpu")
-        print("🐢 [训练] 未检测到 GPU，使用 CPU (速度较慢)")
+        print("[CPU] [训练] 未检测到 GPU，使用 CPU (速度较慢)")
 
     # 2. 准备数据
     dataset = KLineDataset(DATA_IMG_DIR)
     if len(dataset) == 0:
-        print("❌ 错误: data/images 目录下没有图片！请先运行 vision_engine 生成图片。")
+        print("[错误] 错误: data/images 目录下没有图片！请先运行 vision_engine 生成图片。")
         return
 
     # num_workers=0 是 Mac 上最稳的设置，防止多进程死锁
@@ -99,8 +99,8 @@ def train():
     # 优化器：Adam
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    print(f"\n🔥 开始训练 (计划 {EPOCHS} 轮)...")
-    print(f"💾 模型将保存在: {MODEL_SAVE_DIR}")
+    print(f"\\n[训练] 开始训练 (计划 {EPOCHS} 轮)...")
+    print(f"[保存] 模型将保存在: {MODEL_SAVE_DIR}")
 
     for epoch in range(EPOCHS):
         model.train()
@@ -130,7 +130,7 @@ def train():
 
         # 计算本轮平均 Loss
         avg_loss = running_loss / len(dataloader)
-        print(f"✅ Epoch {epoch + 1} 完成 | 平均 Loss: {avg_loss:.6f}")
+        print(f"[OK] Epoch {epoch + 1} 完成 | 平均 Loss: {avg_loss:.6f}")
 
         # --- D. 保存模型 ---
         # 保存两个版本：最新版和当前轮次版
@@ -139,9 +139,9 @@ def train():
 
         torch.save(model.state_dict(), save_path_latest)
         torch.save(model.state_dict(), save_path_epoch)
-        print(f"💾 模型参数已保存")
+        print(f"[保存] 模型参数已保存")
 
-    print("\n🎉 训练全部完成！新大脑已就绪。")
+    print("\\n[完成] 训练全部完成！新大脑已就绪。")
 
 
 if __name__ == "__main__":

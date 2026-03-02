@@ -164,17 +164,17 @@ class KellyPositionCalculator:
     def _get_recommendation(self, position: float, risk_level: str) -> str:
         """生成仓位建议文字"""
         if position <= 0:
-            return "🚫 不建议买入：胜率或盈亏比不达标"
+            return "[禁止] 不建议买入：胜率或盈亏比不达标"
         elif position < 0.05:
-            return f"⚠️ 轻仓试探：建议仓位 {position*100:.1f}%"
+            return f"[轻仓] 轻仓试探：建议仓位 {position*100:.1f}%"
         elif position < 0.10:
-            return f"📊 常规配置：建议仓位 {position*100:.1f}%"
+            return f"[常规] 常规配置：建议仓位 {position*100:.1f}%"
         elif position < 0.15:
-            return f"✅ 标准仓位：建议仓位 {position*100:.1f}%"
+            return f"[标准] 标准仓位：建议仓位 {position*100:.1f}%"
         elif position < 0.20:
-            return f"💪 积极配置：建议仓位 {position*100:.1f}%"
+            return f"[积极] 积极配置：建议仓位 {position*100:.1f}%"
         else:
-            return f"🔥 重仓机会：建议仓位 {position*100:.1f}%（注意风险）"
+            return f"[重仓] 重仓机会：建议仓位 {position*100:.1f}%（注意风险）"
 
 
 class PositionManager:
@@ -288,21 +288,21 @@ class PositionManager:
         win_rate = result.get('win_rate', 0)
         
         if position <= 0:
-            return "🚫 暂不建议买入"
+            return "[禁止] 暂不建议买入"
         
         # 根据评分生成建议
         if score >= 8:
             action = "强烈推荐"
-            emoji = "🔥"
+            emoji = "[高]"
         elif score >= 7:
             action = "建议买入"
-            emoji = "✅"
+            emoji = "[中高]"
         elif score >= 6:
             action = "可以关注"
-            emoji = "📊"
+            emoji = "[中]"
         else:
             action = "谨慎对待"
-            emoji = "⚠️"
+            emoji = "[低]"
         
         return f"{emoji} {action}：建议仓位 {position*100:.1f}%（评分{score:.1f}分，历史胜率{win_rate*100:.0f}%）"
 

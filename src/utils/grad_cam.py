@@ -74,7 +74,7 @@ class GradCAM:
             target.register_forward_hook(forward_hook)
             target.register_full_backward_hook(backward_hook)
         else:
-            print("⚠️ 未找到目标层，Grad-CAM可能无法正常工作")
+            print("[警告] 未找到目标层，Grad-CAM可能无法正常工作")
     
     def _get_layer(self, name: str):
         """根据名称获取层"""
@@ -138,7 +138,7 @@ class GradCAM:
         target.backward(retain_graph=True)
         
         if self.gradients is None or self.activations is None:
-            print("⚠️ 未能捕获梯度或激活值")
+            print("[警告] 未能捕获梯度或激活值")
             return np.zeros((224, 224))
         
         # 计算权重（全局平均池化梯度）
@@ -325,7 +325,7 @@ def create_gradcam_overlay(
     # 保存
     if output_path:
         Image.fromarray(overlay).save(output_path)
-        print(f"✅ Grad-CAM图已保存: {output_path}")
+        print(f"[OK] Grad-CAM图已保存: {output_path}")
     
     return overlay
 
@@ -403,7 +403,7 @@ def visualize_top10_with_gradcam(
     plt.tight_layout()
     plt.savefig(output_path, dpi=100, bbox_inches='tight')
     plt.close('all')
-    print(f"✅ Grad-CAM对比图已保存: {output_path}")
+    print(f"[OK] Grad-CAM对比图已保存: {output_path}")
 
 
 if __name__ == "__main__":

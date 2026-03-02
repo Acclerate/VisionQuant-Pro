@@ -141,7 +141,7 @@ class AttentionVisualizer:
         
         if save_path:
             fig.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')
-            print(f"✅ Saved to {save_path}")
+            print(f"[OK] Saved to {save_path}")
         
         return fig
     
@@ -217,7 +217,7 @@ class AttentionVisualizer:
         
         if save_path:
             fig.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')
-            print(f"✅ Saved to {save_path}")
+            print(f"[OK] Saved to {save_path}")
         
         return fig
     
@@ -321,7 +321,7 @@ class AttentionVisualizer:
         
         if save_path:
             fig.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')
-            print(f"✅ Saved to {save_path}")
+            print(f"[OK] Saved to {save_path}")
         
         return fig
     
@@ -355,7 +355,7 @@ class AttentionVisualizer:
                 save_path=os.path.join(output_dir, f"attention_multihead_{i}.pdf")
             )
         
-        print(f"✅ Generated {len(images) * 2} figures in {output_dir}")
+        print(f"[OK] Generated {len(images) * 2} figures in {output_dir}")
 
 
 def create_attention_comparison_figure(
@@ -452,13 +452,13 @@ if __name__ == "__main__":
     print("\nTesting single attention visualization...")
     fig = visualizer.visualize_single_attention(test_image, head_idx=0)
     plt.close(fig)
-    print("✅ Single attention visualization passed")
+    print("[OK] Single attention visualization passed")
     
     # 测试多头注意力可视化
     print("\nTesting multi-head attention visualization...")
     fig = visualizer.visualize_multi_head_attention(test_image)
     plt.close(fig)
-    print("✅ Multi-head attention visualization passed")
+    print("[OK] Multi-head attention visualization passed")
     
     # 测试形态分析
     print("\nTesting pattern analysis...")
@@ -468,6 +468,6 @@ if __name__ == "__main__":
         key_regions=[(10, 4), (10, 10)]  # 假设的两个底部位置
     )
     plt.close(fig)
-    print("✅ Pattern analysis visualization passed")
+    print("[OK] Pattern analysis visualization passed")
     
-    print("\n✅ All tests passed!")
+    print("\\n[OK] All tests passed!")

@@ -64,7 +64,7 @@ class IndustrialPredictorReduced:
     def __init__(self):
         # 降维操作纯数学计算，CPU 很稳
         self.device = torch.device("cpu")
-        print(f"🏭 [降维引擎] 启动... 目标维度: 1024")
+        print(f"[降维] [降维引擎] 启动... 目标维度: 1024")
         self.returns_map = {}
 
     def run_pipeline(self):
@@ -73,7 +73,7 @@ class IndustrialPredictorReduced:
 
         # Step 2: 检查源数据
         if not os.path.exists(VECTORS_HUGE_MMAP) or not os.path.exists(META_CSV_FILE):
-            print("❌ 严重错误：找不到 vectors_mmap.npy 或 meta_data.csv！")
+            print("[错误] 严重错误：找不到 vectors_mmap.npy 或 meta_data.csv！")
             print("请先运行之前的 [工业引擎] 代码完成 Step 3。")
             return
 
@@ -83,7 +83,7 @@ class IndustrialPredictorReduced:
         del df_meta
         gc.collect()
 
-        print(f"📊 检测到源数据: {total_rows} 条记录")
+        print(f"[数据] 检测到源数据: {total_rows} 条记录")
 
         # Step 3.5: 执行降维 (核心！)
         self._step3_5_reduce_dimensions(total_rows)
@@ -109,7 +109,7 @@ class IndustrialPredictorReduced:
                         self.returns_map[f"{symbol}_{d.strftime('%Y%m%d')}"] = r
             except:
                 continue
-        print(f"✅ 收益率加载完成")
+        print(f"[OK] 收益率加载完成")
 
     def _step3_5_reduce_dimensions(self, total_rows):
         """将 50176 维压缩到 1024 维"""
@@ -122,7 +122,7 @@ class IndustrialPredictorReduced:
                 return
 
         print(f"\n[Step 3.5] 执行高维特征压缩 (50176 -> 1024)...")
-        print("💡 这是一个 IO 密集型操作，请耐心等待...")
+        print("[提示] 这是一个 IO 密集型操作，请耐心等待...")
 
         # 1. 映射源文件 (只读)
         huge_dim = 50176
@@ -165,14 +165,14 @@ class IndustrialPredictorReduced:
             del batch_huge, batch_tensor, batch_small
 
         mmap_small.flush()
-        print(f"✅ 压缩完成！体积缩小 50 倍。")
+        print(f"[OK] 压缩完成！体积缩小 50 倍。")
 
     def _step4_build_index(self, total_rows):
         print("\n[Step 4] 构建 FAISS 索引 (1024维)...")
 
         # 如果索引已存在，跳过
         if os.path.exists(INDEX_FILE):
-            print("✅ 索引文件已存在，跳过。")
+            print("[OK] 索引文件已存在，跳过。")
             return
 
         dim = 1024
@@ -191,7 +191,7 @@ class IndustrialPredictorReduced:
             gc.collect()
 
         faiss.write_index(index, INDEX_FILE)
-        print("✅ 索引构建完成。")
+        print("[OK] 索引构建完成。")
 
     def _step5_batch_predict(self, total_rows):
         print("\n[Step 5] 流式推演 (基于压缩特征)...")
@@ -259,7 +259,7 @@ class IndustrialPredictorReduced:
 
                 if start_idx % 1000 == 0: gc.collect()
 
-        print(f"🎉 全部完成！结果保存在: {PREDICTION_CACHE_FILE}")
+        print(f"[完成] 全部完成！结果保存在: {PREDICTION_CACHE_FILE}")
 
 
 # 为了向后兼容，提供 PredictEngine 别名

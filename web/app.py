@@ -4,10 +4,78 @@ import os, sys, pandas as pd, numpy as np, mplfinance as mpf, plotly.graph_objec
 from datetime import datetime
 import importlib
 import logging
+import inspect
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Streamlit 版本兼容性处理
+# 检测 st.image 是否支持 use_container_width 参数（1.12.0+）
+try:
+    sig = inspect.signature(st.image)
+    _USE_CONTAINER_WIDTH_SUPPORTED = 'use_container_width' in sig.parameters
+except Exception:
+    _USE_CONTAINER_WIDTH_SUPPORTED = False
+
+# 检测 st.button 是否支持 use_container_width 参数
+try:
+    sig = inspect.signature(st.button)
+    _BUTTON_USE_CONTAINER_WIDTH_SUPPORTED = 'use_container_width' in sig.parameters
+except Exception:
+    _BUTTON_USE_CONTAINER_WIDTH_SUPPORTED = False
+
+# 检测 st.plotly_chart 是否支持 use_container_width 参数
+try:
+    sig = inspect.signature(st.plotly_chart)
+    _PLOTLY_USE_CONTAINER_WIDTH_SUPPORTED = 'use_container_width' in sig.parameters
+except Exception:
+    _PLOTLY_USE_CONTAINER_WIDTH_SUPPORTED = False
+
+# 检测 st.dataframe 是否支持 use_container_width 参数
+try:
+    sig = inspect.signature(st.dataframe)
+    _DATAFRAME_USE_CONTAINER_WIDTH_SUPPORTED = 'use_container_width' in sig.parameters
+except Exception:
+    _DATAFRAME_USE_CONTAINER_WIDTH_SUPPORTED = False
+
+# 兼容性包装函数
+def _st_image(image, caption=None, width=None, use_container_width=False):
+    """兼容性包装 st.image"""
+    kwargs = {}
+    if caption is not None:
+        kwargs['caption'] = caption
+    if width is not None:
+        kwargs['width'] = width
+    if _USE_CONTAINER_WIDTH_SUPPORTED and use_container_width:
+        kwargs['use_container_width'] = True
+    return st.image(image, **kwargs)
+
+def _st_button(label, key=None, type="secondary", use_container_width=False, on_click=None, args=(), kwargs={}):
+    """兼容性包装 st.button"""
+    func = st.button
+    call_kwargs = {}
+    if key is not None:
+        call_kwargs['key'] = key
+    if on_click is not None:
+        call_kwargs['on_click'] = on_click
+        call_kwargs['args'] = args
+        call_kwargs['kwargs'] = kwargs
+    if _BUTTON_USE_CONTAINER_WIDTH_SUPPORTED and use_container_width:
+        call_kwargs['use_container_width'] = True
+    return func(label, type=type, **call_kwargs)
+
+def _st_plotly_chart(figure_or_data, use_container_width=False, **kwargs):
+    """兼容性包装 st.plotly_chart"""
+    if _PLOTLY_USE_CONTAINER_WIDTH_SUPPORTED and use_container_width:
+        kwargs['use_container_width'] = True
+    return st.plotly_chart(figure_or_data, **kwargs)
+
+def _st_dataframe(data, use_container_width=False, **kwargs):
+    """兼容性包装 st.dataframe"""
+    if _DATAFRAME_USE_CONTAINER_WIDTH_SUPPORTED and use_container_width:
+        kwargs['use_container_width'] = True
+    return st.dataframe(data, **kwargs)
 
 # 定义项目根目录
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -603,27 +671,42 @@ except ImportError:
 with st.sidebar:
     st.title("🦄 VisionQuant Pro")
     st.caption("AI 全栈量化投研系统 v8.8")
-    
+
     # === 数据源选择 ===
     with st.expander("⚙️ 数据源设置", expanded=False):
-        ds_map = {"AkShare (免费)": "akshare", "JQData (聚宽)": "jqdata", "RQData (米筐)": "rqdata"}
+        ds_map = {
+            "掘金SDK (推荐)": "diggold",
+            "AkShare (免费)": "akshare",
+            "JQData (聚宽)": "jqdata",
+            "RQData (米筐)": "rqdata"
+        }
         ds_label = st.selectbox("选择数据源", list(ds_map.keys()), index=0)
         curr_ds = ds_map[ds_label]
-        
+
+        # 数据源状态提示
+        if curr_ds == "diggold":
+            token = os.getenv("DIGGOLD_TOKEN", "")
+            if token:
+                st.success("✅ 掘金SDK已配置")
+            else:
+                st.warning("⚠️ 未配置DIGGOLD_TOKEN")
+
         # 如果选了付费源，检查/提示输入账号
         if curr_ds in ["jqdata", "rqdata"]:
             st.caption(f"需提供 {curr_ds} 账号 (或设置环境变量)")
             ds_user = st.text_input("用户名", key=f"{curr_ds}_user")
             ds_pass = st.text_input("密码", type="password", key=f"{curr_ds}_pass")
-            if st.button("切换/认证"):
+            if st.button("切换/认证", key=f"switch_{curr_ds}"):
                 eng["loader"].switch_data_source(curr_ds, username=ds_user, password=ds_pass)
                 st.success(f"已尝试切换至 {curr_ds}")
         else:
-            if eng["loader"].get_current_data_source() != "akshare":
-                eng["loader"].switch_data_source("akshare")
+            # 自动切换到选中的免费数据源
+            if eng["loader"].get_current_data_source() != curr_ds:
+                eng["loader"].switch_data_source(curr_ds)
+                st.success(f"已切换至 {ds_label}")
 
         st.divider()
-    symbol_input = st.text_input("请输入 A 股代码", value="601899", help="输入6位代码", key="symbol_input")
+    symbol_input = st.text_input("请输入 A 股代码", value="000818", help="输入6位代码", key="symbol_input")
     symbol = symbol_input.strip().zfill(6)
     mode = st.radio("功能模块:", ("🔍 单只股票分析", "📊 批量组合分析"), key="mode_select")
 
@@ -635,7 +718,7 @@ with st.sidebar:
         batch_input = st.text_area("输入股票代码（每行一个，最多30只）", height=150, key="batch_input")
 
     st.divider()
-    run_btn = st.button("🚀 开始分析", type="primary", use_container_width=True)
+    run_btn = _st_button("🚀 开始分析", type="primary", use_container_width=True)
 
     if st.button("🔄 强制重载", help="清除缓存，重新加载模块"):
         st.cache_resource.clear()
@@ -691,11 +774,12 @@ if mode == "🔍 单只股票分析":
         with st.spinner(f"正在全栈扫描 {symbol}..."):
             try:
                 logger.info(f"开始分析股票: {symbol}")
-                # 工业化默认：先用本地缓存秒开，再按需实时刷新（避免网络抖动导致首屏卡死）
-                df = eng["loader"].get_stock_data(symbol, use_cache=True)
+                from datetime import timedelta
+                one_year_ago = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+                df = eng["loader"].get_stock_data(symbol, start_date=one_year_ago, use_cache=True)
                 if df is None or df.empty:
                     logger.warning(f"本地缓存缺失，尝试实时拉取: {symbol}")
-                    df = eng["loader"].get_stock_data(symbol, use_cache=False)
+                    df = eng["loader"].get_stock_data(symbol, start_date=one_year_ago, use_cache=False)
                     if df is None or df.empty:
                         st.error("数据获取失败")
                         logger.error(f"数据获取失败: {symbol}")
@@ -989,7 +1073,7 @@ if mode == "🔍 单只股票分析":
                         fig_miss = go.Figure()
                         fig_miss.add_trace(go.Bar(x=list(by_col.keys()), y=list(by_col.values())))
                         fig_miss.update_layout(height=250, title="缺失值分布")
-                        st.plotly_chart(fig_miss, use_container_width=True)
+                        _st_plotly_chart(fig_miss, use_container_width=True)
                 if qr.get("adjust_integrity"):
                     adj = qr["adjust_integrity"]
                     if adj.get("available"):
@@ -998,7 +1082,7 @@ if mode == "🔍 单只股票分析":
                         st.write("复权完整性: 未提供复权列")
                 if qr.get("warnings"):
                     st.write("警告: " + "; ".join(qr.get("warnings", [])[:5]))
-        st.image(d['c_p'], use_container_width=True)
+        _st_image(d['c_p'], use_container_width=True)
 
         # 相似度分解（视觉相似度/相关性）
         if d.get("matches"):
@@ -1037,7 +1121,7 @@ if mode == "🔍 单只股票分析":
                     "最终分": round(float(m.get("score", 0)), 4)
                 })
             with st.expander("🔍 相似度分解（可解释）", expanded=False):
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                _st_dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
         # 注意力热力图（如果模型支持）
         try:
@@ -1047,12 +1131,12 @@ if mode == "🔍 单只股票分析":
                     heat_path = os.path.join(PROJECT_ROOT, "data", "temp_attention.png")
                     if mode == "多头(全部)":
                         eng["vision"].generate_attention_heatmap(d.get("q_p"), save_path=heat_path, mode="all")
-                        st.image(heat_path, use_container_width=True)
+                        _st_image(heat_path, use_container_width=True)
                     else:
                         num_heads = getattr(eng["vision"].model, "num_attention_heads", 8)
                         head_idx = st.slider("选择注意力头", 0, max(0, num_heads - 1), 0, key="attn_head")
                         eng["vision"].generate_attention_heatmap(d.get("q_p"), save_path=heat_path, head_idx=head_idx, mode="single")
-                        st.image(heat_path, use_container_width=True)
+                        _st_image(heat_path, use_container_width=True)
                     if os.path.exists(heat_path):
                         os.remove(heat_path)
         except Exception:
@@ -1093,7 +1177,7 @@ if mode == "🔍 单只股票分析":
                         name="沪深300收盘"
                     ))
                     fig_idx.update_layout(height=260, margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig_idx, use_container_width=True)
+                    _st_plotly_chart(fig_idx, use_container_width=True)
             st.caption(f"公式：{sent.get('formula')}")
 
         if d['trajs']:
@@ -1103,7 +1187,7 @@ if mode == "🔍 单只股票分析":
                                          name=d['labels'][i]))
             fig.add_trace(go.Scatter(y=d['mean'], mode='lines+markers', line=dict(color='#d62728', width=3), name='平均预期'))
             fig.update_layout(title=f"未来5日走势推演 (胜率: {d['win']:.0f}%)", xaxis_title="天数", yaxis_title="收益%", height=400)
-            st.plotly_chart(fig, config={"displayModeBar": False}, use_container_width=True)
+            _st_plotly_chart(fig, config={"displayModeBar": False}, use_container_width=True)
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("历史胜率", f"{d['win']:.1f}%")
             c2.metric("预期收益", f"{d['ret']:.2f}%")
@@ -1140,7 +1224,7 @@ if mode == "🔍 单只股票分析":
                         name=f"{h}日"
                     ))
                 mh_fig.update_layout(title="多期收益预期（5/10/20日）", xaxis_title="持有期(天)", yaxis_title="均值收益(%)", height=280)
-                st.plotly_chart(mh_fig, use_container_width=True)
+                _st_plotly_chart(mh_fig, use_container_width=True)
 
             # 收益分布估计
             dist = d.get("dist_stats", {})
@@ -1184,7 +1268,7 @@ if mode == "🔍 单只股票分析":
                                     val = f"{v:.4f}" if isinstance(v, (int, float)) else str(v)
                             rows.append({"指标": label, "数值": val})
                         if rows:
-                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                            _st_dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
                     dist_map = ef.get("dist_map", {})
                     if dist_map:
                         rows = []
@@ -1201,7 +1285,7 @@ if mode == "🔍 单只股票分析":
                                 "赔率": stats.get("odds")
                             })
                         if rows:
-                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                            _st_dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
         st.divider()
         c_left, c_right = st.columns([1.5, 1])
@@ -1317,7 +1401,7 @@ if mode == "🔍 单只股票分析":
                             rows.append({"指标": "RSI", "数值": round(float(rsi), 2)})
                         if macd_hist is not None:
                             rows.append({"指标": "MACD柱", "数值": round(float(macd_hist), 4)})
-                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                        _st_dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
                     else:
                         st.info("技术因子暂不可用")
 
@@ -1333,7 +1417,7 @@ if mode == "🔍 单只股票分析":
                     {"因子": "基本面(F)", "权重": weights_payload.get("财务权重")},
                     {"因子": "技术(Q)", "权重": weights_payload.get("量化权重")},
                 ])
-                st.dataframe(weights_df, use_container_width=True, hide_index=True)
+                _st_dataframe(weights_df, use_container_width=True, hide_index=True)
                 if explain:
                     st.caption(f"权重更新时间: {weights_payload.get('权重更新时间', 'N/A')}")
                     st.write("权重计算逻辑（统计/算法）：")
@@ -1361,7 +1445,7 @@ if mode == "🔍 单只股票分析":
                 ])
                 with st.expander("🧠 评分占比（非权重）", expanded=False):
                     st.caption("说明：这里展示的是分数构成占比，不等同于权重。")
-                    st.dataframe(contrib, use_container_width=True, hide_index=True)
+                    _st_dataframe(contrib, use_container_width=True, hide_index=True)
             except Exception:
                 pass
 
@@ -1639,13 +1723,13 @@ elif mode == "📊 批量组合分析":
                     "胜率": f"{data.get('win_rate', 0):.1f}%",
                     "预期收益": f"{data.get('expected_return', 0):.2f}%"
                 })
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            _st_dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
             for sym, w in sorted(weights.items(), key=lambda x: x[1], reverse=True):
                 data = batch_results.get(sym, {})
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 4])
                 with c1:
-                    if st.button(f"📊 {data.get('name', sym)} ({sym})", key=f"link_{title}_{sym}", use_container_width=True):
+                    if _st_button(f"📊 {data.get('name', sym)} ({sym})", key=f"link_{title}_{sym}", use_container_width=True):
                         _goto_symbol(sym)
                 with c2:
                     st.write(f"**{data.get('score', 0):.1f}/10**")
@@ -1686,7 +1770,7 @@ elif mode == "📊 批量组合分析":
                             rb = pd.DataFrame(
                                 [{"symbol": k, "risk_contrib": v} for k, v in metrics["risk_budget"].items()]
                             )
-                            st.dataframe(rb, use_container_width=True, hide_index=True)
+                            _st_dataframe(rb, use_container_width=True, hide_index=True)
             except Exception:
                 pass
 
@@ -1703,20 +1787,20 @@ elif mode == "📊 批量组合分析":
                         {"symbol": s, "current": round(prev_weights.get(s, 0)*100, 1), "target": round(rebalance_weights.get(s, 0)*100, 1)}
                         for s in set(prev_weights) | set(rebalance_weights)
                     ])
-                    st.dataframe(r_df, use_container_width=True, hide_index=True)
+                    _st_dataframe(r_df, use_container_width=True, hide_index=True)
             except Exception:
                 pass
             labels = [f"{batch_results[s].get('name', s)}({s})" for s in combined_weights.keys()]
             values = [combined_weights[s] for s in combined_weights.keys()]
             pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.35)])
             pie.update_layout(height=320, title="组合权重分布")
-            st.plotly_chart(pie, use_container_width=True)
+            _st_plotly_chart(pie, use_container_width=True)
 
             bar = go.Figure()
             bar.add_trace(go.Bar(x=labels, y=[batch_results[s].get('score', 0) for s in combined_weights.keys()],
                                  name="评分", marker_color="#ff4b4b"))
             bar.update_layout(height=300, title="评分对比")
-            st.plotly_chart(bar, use_container_width=True)
+            _st_plotly_chart(bar, use_container_width=True)
 
             scatter = go.Figure()
             for s in combined_weights.keys():
@@ -1729,7 +1813,7 @@ elif mode == "📊 批量组合分析":
                     name=s
                 ))
             scatter.update_layout(height=320, title="胜率 vs 预期收益", xaxis_title="胜率(%)", yaxis_title="预期收益(%)")
-            st.plotly_chart(scatter, use_container_width=True)
+            _st_plotly_chart(scatter, use_container_width=True)
 
             st.subheader("🕯️ 组合Top3 K线展示")
             top_syms = [s for s, _ in sorted(combined_weights.items(), key=lambda x: x[1], reverse=True)[:3]]
@@ -1746,7 +1830,7 @@ elif mode == "📊 批量组合分析":
                         mpf.plot(dfk.tail(60), type='candle', style=sstyle,
                                  savefig=dict(fname=tmp_img, dpi=80), figsize=(4, 3), axisoff=True)
                         with cols[i]:
-                            st.image(tmp_img, caption=f"{sym}", use_container_width=True)
+                            _st_image(tmp_img, caption=f"{sym}", use_container_width=True)
                         if os.path.exists(tmp_img):
                             os.remove(tmp_img)
                     except Exception:
@@ -1757,7 +1841,7 @@ elif mode == "📊 批量组合分析":
                 if st.button("运行分层回测", key="strat_bt_btn"):
                     strat_df = run_stratified_backtest_batch(list(batch_results.keys()), eng)
                     if strat_df is not None and not strat_df.empty:
-                        st.dataframe(strat_df, use_container_width=True, hide_index=True)
+                        _st_dataframe(strat_df, use_container_width=True, hide_index=True)
                     else:
                         st.info("分层样本不足或数据不可用")
 
@@ -1784,7 +1868,7 @@ elif mode == "📊 批量组合分析":
                     for sym in weight_df.columns:
                         fig_w.add_trace(go.Scatter(x=weight_df.index, y=weight_df[sym], mode="lines", name=sym))
                     fig_w.update_layout(height=320, title="月度权重演化（动量驱动）")
-                    st.plotly_chart(fig_w, use_container_width=True)
+                    _st_plotly_chart(fig_w, use_container_width=True)
             except Exception:
                 pass
 
@@ -1812,7 +1896,7 @@ elif mode == "📊 批量组合分析":
                         colorscale="RdYlGn"
                     ))
                     heat.update_layout(height=320)
-                    st.plotly_chart(heat, use_container_width=True)
+                    _st_plotly_chart(heat, use_container_width=True)
             except Exception:
                 pass
         
@@ -1824,7 +1908,7 @@ elif mode == "📊 批量组合分析":
                 for symbol, data in sorted(all_other.items(), key=lambda x: x[1].get('score', 0)):
                     col1, col2, col3 = st.columns([3, 1, 4])
                     with col1:
-                        if st.button(f"📊 {data.get('name', symbol)} ({symbol})", 
+                        if _st_button(f"📊 {data.get('name', symbol)} ({symbol})",
                                    key=f"link_other_{symbol}", use_container_width=True):
                             _goto_symbol(symbol)
                     with col2:

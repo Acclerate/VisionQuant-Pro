@@ -458,14 +458,14 @@ class AttentionCAETrainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss': loss,
         }, path)
-        print(f"✅ Checkpoint saved to {path}")
+        print(f"[OK] Checkpoint saved to {path}")
     
     def load_checkpoint(self, path: str):
         """加载检查点"""
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        print(f"✅ Checkpoint loaded from {path}")
+        print(f"[OK] Checkpoint loaded from {path}")
         return checkpoint['epoch'], checkpoint['loss']
 
 
@@ -528,4 +528,4 @@ if __name__ == "__main__":
     print(f"\nWithout Attention:")
     print(f"Latent shape: {latent_no_attn.shape}")
     
-    print("\n✅ All tests passed!")
+    print("\\n[OK] All tests passed!")

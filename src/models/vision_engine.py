@@ -133,6 +133,9 @@ class VisionEngine:
         self.model = None
         self.pool = None
         self.model_mode = None  # "attention" | "cae"
+        self._index_loaded = False
+        self._index_load_attempted = False
+        self._model_available = False
 
         # 1. 优先加载 AttentionCAE，如果不存在则回退到 QuantCAE
         if os.path.exists(ATTENTION_MODEL_PATH):
@@ -154,9 +157,13 @@ class VisionEngine:
         self._edge_cache = {}
         self._data_loader = None
 
+    def is_available(self) -> bool:
+        """检查视觉引擎是否可用（模型+索引都已加载）"""
+        return self._model_available and self._index_loaded
+
     def _load_attention_model(self):
         try:
-            print(f"👁️ [VisionEngine] 启动中... 加载模型: AttentionCAE")
+            print(f"[VisionEngine] 启动中... 加载模型: AttentionCAE")
             self.model = AttentionCAE(latent_dim=1024, num_attention_heads=8).to(self.device)
             state_dict = torch.load(ATTENTION_MODEL_PATH, map_location=self.device)
             self.model.load_state_dict(state_dict)
@@ -164,37 +171,46 @@ class VisionEngine:
             self.use_attention = True
             self.pool = None
             self.model_mode = "attention"
-            print(f"✅ AttentionCAE 加载成功")
+            self._model_available = True
+            print(f"[OK] AttentionCAE 加载成功")
             return True
         except Exception as e:
-            print(f"❌ AttentionCAE 权重加载失败: {e}")
+            print(f"[警告] AttentionCAE 权重加载失败: {e}")
             return False
 
     def _load_cae_model(self):
         try:
-            print(f"👁️ [VisionEngine] 启动中... 加载模型: QuantCAE (回退模式)")
+            print(f"[VisionEngine] 启动中... 加载模型: QuantCAE (回退模式)")
             from src.models.autoencoder import QuantCAE
             self.model = QuantCAE().to(self.device)
             if os.path.exists(CAE_MODEL_PATH):
                 state_dict = torch.load(CAE_MODEL_PATH, map_location=self.device)
                 self.model.load_state_dict(state_dict)
                 self.model.eval()
-                print(f"✅ QuantCAE 加载成功")
+                print(f"[OK] QuantCAE 加载成功")
+                self._model_available = True
+            else:
+                print(f"[警告] QuantCAE 权重文件不存在，视觉相似匹配功能不可用")
             self.use_attention = False
             self.pool = nn.AdaptiveAvgPool1d(1024)
             self.model_mode = "cae"
             return True
         except Exception as e:
-            print(f"❌ QuantCAE 权重加载失败: {e}")
+            print(f"[警告] QuantCAE 加载失败: {e}")
             return False
 
     def reload_index(self):
+        if self._index_load_attempted:
+            return self._index_loaded
+        self._index_load_attempted = True
+
         # 优先加载 AttentionCAE 索引
         index_file = ATTENTION_INDEX_FILE if os.path.exists(ATTENTION_INDEX_FILE) else INDEX_FILE
         meta_file = ATTENTION_META_CSV if os.path.exists(ATTENTION_META_CSV) else META_CSV
         
         if not os.path.exists(index_file):
-            print(f"❌ 索引文件不存在: {index_file}")
+            print(f"[警告] 索引文件不存在: {index_file}")
+            print(f"[提示] 视觉相似匹配功能已禁用，其他功能正常使用")
             return False
 
         # 索引与模型对齐
@@ -205,14 +221,14 @@ class VisionEngine:
             else:
                 self._load_cae_model()
 
-        print(f"📥 [VisionEngine] 加载索引: {os.path.basename(index_file)}")
+        print(f"[VisionEngine] 加载索引: {os.path.basename(index_file)}")
         try:
             import time
             start_time = time.time()
             self.index = faiss.read_index(index_file)
-            print(f"  ⏱️  FAISS索引加载耗时: {time.time() - start_time:.1f}秒")
+            print(f"  [耗时] FAISS索引加载耗时: {time.time() - start_time:.1f}秒")
         except Exception as e:
-            print(f"❌ FAISS 加载失败: {e}")
+            print(f"[错误] FAISS 加载失败: {e}")
             return False
 
         if os.path.exists(meta_file):
@@ -221,23 +237,24 @@ class VisionEngine:
             # 优化：使用更快的CSV读取参数
             df = pd.read_csv(meta_file, dtype=str, engine='c', low_memory=False)
             self.meta_data = df.to_dict('records')
-            print(f"  ⏱️  元数据CSV加载耗时: {time.time() - start_time:.1f}秒 ({len(self.meta_data)}条记录)")
+            print(f"  [耗时] 元数据CSV加载耗时: {time.time() - start_time:.1f}秒 ({len(self.meta_data)}条记录)")
         elif os.path.exists(META_PKL):
             import time
             start_time = time.time()
             with open(META_PKL, 'rb') as f:
                 self.meta_data = pickle.load(f)
-            print(f"  ⏱️  元数据PKL加载耗时: {time.time() - start_time:.1f}秒")
+            print(f"  [耗时] 元数据PKL加载耗时: {time.time() - start_time:.1f}秒")
         else:
-            print(f"❌ 元数据文件不存在: {meta_file}")
+            print(f"[错误] 元数据文件不存在: {meta_file}")
             return False
 
         import time
         start_time = time.time()
         self._build_image_path_index()
-        print(f"  ⏱️  路径索引构建耗时: {time.time() - start_time:.1f}秒")
+        print(f"  [耗时] 路径索引构建耗时: {time.time() - start_time:.1f}秒")
 
-        print(f"✅ 知识库就绪: {len(self.meta_data)} 条记录")
+        print(f"[OK] 知识库就绪: {len(self.meta_data)} 条记录")
+        self._index_loaded = True
         return True
 
     def _build_image_path_index(self):

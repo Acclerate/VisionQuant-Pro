@@ -18,7 +18,7 @@ DEFAULT_START_DATE = "20100101"
 logger = logging.getLogger(__name__)
 
 # 导入数据源适配器
-from .data_source import DataSource, AkshareDataSource
+from .data_source import DataSource, DiggoldDataSource, EfinanceDataSource, AkshareDataSource
 from .jqdata_adapter import JQDataAdapter
 from .rqdata_adapter import RQDataAdapter
 from .quality_checker import DataQualityChecker
@@ -27,14 +27,16 @@ from .quality_checker import DataQualityChecker
 class DataLoader:
     """
     数据加载器（支持多数据源切换）
-    
+
     支持的数据源：
-    - 'akshare': 免费数据源（默认）
+    - 'diggold': 东财掘金SDK数据源（默认，推荐，最稳定）
+    - 'efinance': 东财掘金数据源（备用）
+    - 'akshare': 免费数据源（备用）
     - 'jqdata': 聚宽数据源（需要认证）
     - 'rqdata': 米筐数据源（需要认证）
     """
-    
-    def __init__(self, data_source: str = 'akshare', **kwargs):
+
+    def __init__(self, data_source: str = 'diggold', **kwargs):
         """
         初始化数据加载器
         
@@ -64,15 +66,19 @@ class DataLoader:
     def _init_data_source(self, source_name: str, **kwargs) -> DataSource:
         """
         初始化数据源
-        
+
         Args:
             source_name: 数据源名称
             **kwargs: 数据源参数
-            
+
         Returns:
             DataSource实例
         """
-        if source_name == 'akshare':
+        if source_name == 'diggold':
+            return DiggoldDataSource()
+        elif source_name == 'efinance':
+            return EfinanceDataSource()
+        elif source_name == 'akshare':
             return AkshareDataSource()
         elif source_name == 'jqdata':
             username = kwargs.get('username') or kwargs.get('jq_username')
@@ -83,8 +89,8 @@ class DataLoader:
             password = kwargs.get('password') or kwargs.get('rq_password')
             return RQDataAdapter(username=username, password=password)
         else:
-            logger.warning("未知数据源: %s，使用 akshare 作为默认", source_name)
-            return AkshareDataSource()
+            logger.warning("未知数据源: %s，使用 diggold 作为默认", source_name)
+            return DiggoldDataSource()
     
     def switch_data_source(self, source_name: str, **kwargs):
         """
@@ -143,7 +149,7 @@ class DataLoader:
             if self.enable_quality_check:
                 quality_result = self.quality_checker.check_data_quality(df_new, symbol)
                 if not quality_result['is_valid']:
-                    print(f"⚠️ [{symbol}] 数据质量检查未通过 (得分: {quality_result['score']}/100)")
+                    print(f"[警告] [{symbol}] 数据质量检查未通过 (得分: {quality_result['score']}/100)")
                     if quality_result['score'] < 50:
                         print(f"  错误: {quality_result['errors']}")
                         return None
@@ -155,9 +161,8 @@ class DataLoader:
             start_str = start_dt.strftime("%Y%m%d")
             end_str = end_dt.strftime("%Y%m%d")
             df_new = None
-            # 当前数据源
             if self.data_source and self.data_source.is_available():
-                print(f"⬇️ [{self.data_source_name}] 拉取 {symbol} 行情 {start_str}-{end_str}...")
+                print(f"[{self.data_source_name}] 拉取 {symbol} 行情 {start_str}-{end_str}...")
                 df_new = self.data_source.get_stock_data(
                     symbol=symbol,
                     start_date=start_str,
@@ -165,17 +170,6 @@ class DataLoader:
                     adjust=adjust
                 )
                 df_new = _validate_df(df_new)
-            if (df_new is None or df_new.empty) and self.data_source_name != 'akshare':
-                print(f"🔄 回退到akshare数据源...")
-                fallback_source = AkshareDataSource()
-                if fallback_source.is_available():
-                    df_new = fallback_source.get_stock_data(
-                        symbol=symbol,
-                        start_date=start_str,
-                        end_date=end_str,
-                        adjust=adjust
-                    )
-                    df_new = _validate_df(df_new)
             return df_new if df_new is not None else pd.DataFrame()
 
         def _detect_gaps(idx, gap_days: int = 45, max_gaps: int = 10):
@@ -311,7 +305,7 @@ class DataLoader:
                     return df_out.copy()
 
                 # 无法获取新数据时，回退旧数据
-                print(f"⚠️ 所有数据源获取失败，使用本地旧数据")
+                print(f"[警告] 所有数据源获取失败，使用本地旧数据")
                 df_out = df_cache_all.loc[req_start_dt:req_end_dt] if not df_cache_all.empty else pd.DataFrame()
                 return df_out.copy()
 
@@ -388,10 +382,18 @@ class DataLoader:
             except Exception as e:
                 logger.warning("指数数据获取失败 [%s]: %s", self.data_source_name, e)
 
-        # 回退到Akshare
-        if (df is None or df.empty) and self.data_source_name != 'akshare':
+        # 智能回退
+        if (df is None or df.empty):
+            if self.data_source_name == 'diggold':
+                fallback_source = EfinanceDataSource()
+                source_name = 'efinance'
+            elif self.data_source_name == 'efinance':
+                fallback_source = DiggoldDataSource()
+                source_name = 'diggold'
+            else:
+                fallback_source = DiggoldDataSource()
+                source_name = 'diggold'
             try:
-                fallback_source = AkshareDataSource()
                 if fallback_source.is_available():
                     df = fallback_source.get_index_data(
                         index_code=index_code,
@@ -399,7 +401,7 @@ class DataLoader:
                         end_date=end_date
                     )
             except Exception as e:
-                logger.warning("指数数据回退失败 [akshare]: %s", e)
+                logger.warning("指数数据回退失败 [%s]: %s", source_name, e)
 
         if df is None or df.empty:
             return pd.DataFrame()
@@ -416,6 +418,9 @@ class DataLoader:
         try:
             if not isinstance(data.index, pd.DatetimeIndex):
                 data.index = pd.to_datetime(data.index, errors="coerce")
+            # 移除时区信息，统一为无时区（避免比较时的类型不匹配）
+            if data.index.tz is not None:
+                data.index = data.index.tz_localize(None)
             data = data[~data.index.isna()]
             data.sort_index(inplace=True)
         except Exception:
@@ -462,7 +467,7 @@ class DataLoader:
                         stock_list = stock_list.sort_values(by='market_cap', ascending=False)
                     return stock_list.head(300)
             except Exception as e:
-                print(f"⚠️ [{self.data_source_name}] 获取股票列表失败: {e}")
+                print(f"[警告] [{self.data_source_name}] 获取股票列表失败: {e}")
         
         # 回退到akshare
         try:
@@ -472,12 +477,12 @@ class DataLoader:
             df = df.head(300)
             return df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
         except Exception as e:
-            print(f"❌ 获取名单失败: {e}")
+            print(f"[错误] 获取名单失败: {e}")
             return pd.DataFrame()
 
     def download_batch_data(self, stock_list, start_date=DEFAULT_START_DATE):
         """批量下载"""
-        print(f"⬇️ [批量维护] 正在检查并更新 {len(stock_list)} 只股票...")
+        print(f"[批量维护] 正在检查并更新 {len(stock_list)} 只股票...")
         for _, row in tqdm(stock_list.iterrows(), total=len(stock_list)):
             symbol = str(row['code']).zfill(6)
             self.get_stock_data(symbol, start_date=start_date)

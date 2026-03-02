@@ -103,4 +103,4 @@ if __name__ == "__main__":
     feature_vec = model.encode(dummy_input)
     print(f"最终特征向量维度: {feature_vec.shape}")  # 应该输出 [2, 50176]
 
-    print("✅ 模型定义无误！")
+    print("[OK] 模型定义无误！")

@@ -303,14 +303,14 @@ class Top10Analyzer:
             格式化的摘要文本
         """
         if not stats.get('valid'):
-            return "⚠️ 无有效统计数据"
+            return "[警告] 无有效统计数据"
         
         summary = []
-        summary.append("📊 **Top10 形态统计分析**")
+        summary.append("[统计] **Top10 形态统计分析**")
         summary.append("")
         
         # 收益统计
-        summary.append("💰 **收益统计**")
+        summary.append("[收益] **收益统计**")
         summary.append(f"- 平均收益: {stats['avg_return']:.2f}%")
         summary.append(f"- 中位数收益: {stats['median_return']:.2f}%")
         summary.append(f"- 收益区间: [{stats['min_return']:.2f}%, {stats['max_return']:.2f}%]")
@@ -318,14 +318,14 @@ class Top10Analyzer:
         summary.append("")
         
         # 胜率
-        summary.append("🎯 **胜率分析**")
+        summary.append("[胜率] **胜率分析**")
         summary.append(f"- 上涨数量: {stats['positive_count']}")
         summary.append(f"- 下跌数量: {stats['negative_count']}")
         summary.append(f"- 历史胜率: {stats['win_rate']:.1f}%")
         summary.append("")
         
         # 风险
-        summary.append("⚠️ **风险指标**")
+        summary.append("[风险] **风险指标**")
         summary.append(f"- 平均最大涨幅: {stats['avg_max_return']:.2f}%")
         summary.append(f"- 平均最大回撤: {stats['avg_max_drawdown']:.2f}%")
         summary.append(f"- 风险调整收益: {stats['sharpe_like']:.2f}")
@@ -333,7 +333,7 @@ class Top10Analyzer:
         
         # 分布
         if stats.get('board_distribution'):
-            summary.append("📍 **板块分布**")
+            summary.append("[板块] **板块分布**")
             for board, count in stats['board_distribution'].items():
                 summary.append(f"- {board}: {count}个")
         
@@ -380,7 +380,7 @@ def create_enhanced_top10_chart(
     if os.path.exists(query_image_path):
         img = Image.open(query_image_path)
         ax_query.imshow(img)
-        ax_query.set_title("📍 当前形态 (Query)", fontsize=14, fontweight='bold', color='blue')
+        ax_query.set_title("[形态] 当前形态 (Query)", fontsize=14, fontweight='bold', color='blue')
     ax_query.axis('off')
     
     # Top1-5
@@ -402,7 +402,7 @@ def create_enhanced_top10_chart(
     # 统计面板
     ax_stats = fig.add_subplot(gs[0, 7])
     ax_stats.axis('off')
-    stats_text = f"""📊 统计摘要
+    stats_text = f"""[统计] 统计摘要
     
 胜率: {stats.get('win_rate', 0):.1f}%
 平均收益: {stats.get('avg_return', 0):.2f}%
@@ -445,7 +445,7 @@ def create_enhanced_top10_chart(
         
         ax_traj.set_xlabel('持有天数')
         ax_traj.set_ylabel('收益率 (%)')
-        ax_traj.set_title('📈 未来20天收益轨迹对比', fontsize=12, fontweight='bold')
+        ax_traj.set_title('[收益] 未来20天收益轨迹对比', fontsize=12, fontweight='bold')
         ax_traj.legend(loc='upper right')
         ax_traj.grid(True, alpha=0.3)
     else:
@@ -461,7 +461,7 @@ def create_enhanced_top10_chart(
         ax_year.bar(years, counts, color='steelblue')
         ax_year.set_xlabel('年份')
         ax_year.set_ylabel('数量')
-        ax_year.set_title('📅 年份分布', fontsize=11)
+        ax_year.set_title('[年份] 年份分布', fontsize=11)
     
     # 板块分布
     ax_board = fig.add_subplot(gs[2, 3:6])
@@ -470,7 +470,7 @@ def create_enhanced_top10_chart(
         counts = list(stats['board_distribution'].values())
         colors = plt.cm.Pastel1(np.linspace(0, 1, len(boards)))
         ax_board.pie(counts, labels=boards, autopct='%1.0f%%', colors=colors)
-        ax_board.set_title('📊 板块分布', fontsize=11)
+        ax_board.set_title('[板块] 板块分布', fontsize=11)
     
     # 收益分布
     ax_ret = fig.add_subplot(gs[2, 6:])
@@ -480,12 +480,12 @@ def create_enhanced_top10_chart(
         ax_ret.axvline(x=0, color='red', linestyle='--')
         ax_ret.set_xlabel('收益率 (%)')
         ax_ret.set_ylabel('数量')
-        ax_ret.set_title('💰 收益分布', fontsize=11)
+        ax_ret.set_title('[收益] 收益分布', fontsize=11)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=120, bbox_inches='tight')
     plt.close('all')
-    print(f"✅ 增强版Top10对比图已保存: {output_path}")
+    print(f"[OK] 增强版Top10对比图已保存: {output_path}")
 
 
 if __name__ == "__main__":
